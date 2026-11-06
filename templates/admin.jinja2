@@ -1,0 +1,68 @@
+{% extends "./layout.jinja2" %}
+
+{% block title %}Личный кабинет{% endblock %}
+
+{% block header %}
+<span>{{ login }}</span>
+<form action="/logout" method="get">
+    <button class="button" type="submit">Выйти</button>
+</form>
+{% endblock %}
+
+{% block content %}
+<article>
+    <form method="get" action="/admin" style="display: flex; gap: 8px;">
+        <select name="course" style="margin-bottom: 0;">
+            <option value="">-</option>
+            <option value="ОАиП">Основы алгоритмизации и программирования</option>
+            <option value="ОВБ">Основы веб-дизайна</option>
+            <option value="ОпБД">Основы проектирования баз данных</option>
+        </select>
+        <select name="payment" style="margin-bottom: 0;">
+            <option value="">-</option>
+            <option value="Наличные">Наличные</option>
+            <option value="Перевод">Перевод</option>
+        </select>
+        <button class="button" type="submit">Применить</button>
+    </form>
+    <p><p>
+    <table>
+        <thead>
+            <tr>
+                <th>Клиент</th>
+                <th>Курс</th>
+                <th>Тип оплаты</th>
+                <th>Дата старта</th>
+                <th>Статус</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for record in records %}
+            <tr>
+                <td>{{ record.user_login }}</td>
+                <td>{{ record.course }}</td>
+                <td>{{ record.payment }}</td>
+                <td>{{ record.date }}</td>
+                <td>
+                    {% if record.status == "Обучение завершено" %}
+                    {{ record.feedback or "Обучение завершено" }}
+                    {% else %}
+                    <form method="post" action="/status" style="display: flex; align-items: center; gap: 8px;">
+                        <select name="new_status" class="select">
+                            <option value="Новая" {% if record.status=="Новая" %}selected{% endif %}>Новая</option>
+                            <option value="Идет обучение" {% if record.status=="Идет обучение" %}selected{% endif %}>
+                                Идет обучение</option>
+                            <option value="Обучение завершено" {% if record.status=="Обучение завершено" %}selected{%
+                                endif %}>Обучение завершено</option>
+                        </select>
+                        <input name="record_id" value="{{ record.id }}" hidden />
+                        <button class="button" type="submit" style="width: max-content;">✓</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</article>
+{% endblock %}

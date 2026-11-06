@@ -1,0 +1,54 @@
+{% extends "./layout.jinja2" %}
+
+{% block title %}Личный кабинет{% endblock %}
+
+{% block header %}
+<span>{{ login }}</span>
+<form action="/logout" method="get">
+    <button class="button" type="submit">Выйти</button>
+</form>
+{% endblock %}
+
+{% block content %}
+<a class="link" href="/profile/new">Создать новую заявку</a>
+<article>
+    <table>
+        <thead>
+            <tr>
+                <th>Курс</th>
+                <th>Тип оплаты</th>
+                <th>Дата старта</th>
+                <th>Статус</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for record in records %}
+            <tr>
+                <td>{{ record.course }}</td>
+                <td>{{ record.payment }}</td>
+                <td>{{ record.date }}</td>
+                <td>
+                    {% if record.status == "Обучение завершено" %}
+                    <details>
+                        <summary>Отзыв</summary>
+                        {% if record.feedback %}
+                        {{ record.feedback }}
+                        {% else %}
+                        <form action="/feedback" method="post">
+                            <input name="new_feedback" required />
+                            <input name="record_id" value="{{ record.id }}" hidden />
+                            <p><p>
+                            <button class="button">Отправить</button>
+                        </form>
+                        {% endif %}
+                    </details>
+                    {% else %}
+                    {{ record.status }}
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</article>
+{% endblock %}

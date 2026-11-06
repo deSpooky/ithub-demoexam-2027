@@ -1,0 +1,217 @@
+from typing import Annotated
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request, Form
+from fastapi import staticfiles
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import RedirectResponse
+from sqlmodel import SQLModel, Field, Session, create_engine, select
+from sqlalchemy.exc import IntegrityError, NoResultFound, ProgrammingError
+
+from seed import users, records
+
+class User(SQLModel, table=True):
+    login: str = Field(primary_key=True)
+    password: str
+    fullname: str
+    phone: str
+    email: str
+    role: str | None = Field(default="user")
+
+class Record(SQLModel, table=True):
+    id: int = Field(primary_key=True, default=None)
+    course: str
+    payment: str
+    date: str
+    user_login: str
+    feedback: str | None = Field(default=None)
+    status: str | None = Field(default="Новая")
+
+class Login(SQLModel):
+    login: str
+    password: str
+
+
+class NewStatus(SQLModel):
+    record_id: int
+    new_status: str
+
+
+class NewFeedback(SQLModel):
+    record_id: int
+    new_feedback: str
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    engine = create_engine('sqlite:///db.sqlite3')
+    SQLModel.metadata.create_all(bind=engine)
+
+    with Session(bind=engine) as session:
+        try:
+            session.add_all([User(**user) for user in users])
+            session.commit()
+        except (IntegrityError, ProgrammingError):
+            session.rollback()
+
+    with Session(bind=engine) as session:
+        try: 
+            session.add_all([User(**user) for user in users])
+            session.commit()
+        except (IntegrityError, ProgrammingError):
+            session.rollback()
+
+    yield
+
+engine = create_engine("sqlite:///db.sqlite3")
+
+app = FastAPI(lifespan=lifespan)
+
+templates = Jinja2Templates(directory="templates") 
+app.mount("/static", staticfiles.StaticFiles(directory="./static"))
+
+@app.get("/login")
+def get_login(request: Request):
+    return templates.TemplateResponse(request, "login.jinja2")
+
+@app.post('/login')
+def post_login(request: Request, login: Annotated[Login, Form()]):
+    with Session(bind=engine) as session:
+        try:
+            expr = select(User).where(User.login == login.login).where(User.password == login.password)
+            user = session.exec(expr).one()
+        except NoResultFound:
+            return templates.TemplateResponse(
+                request, 
+                'login.jinja2', 
+                context={
+                    "error": "Неверные данные"
+                }
+            )
+
+    response = RedirectResponse(
+        '/admin' if user.role == 'moderator' else '/profile', 
+        status_code=302
+    )
+    
+    response.set_cookie('login', user.login)
+    response.set_cookie('role', user.role)
+
+    return response
+
+@app.get('/register')
+def get_register(request: Request):
+    return templates.TemplateResponse(request, 'register.jinja2')
+
+@app.post('/register')
+def post_register(request: Request, user: Annotated[User, Form()]):
+    with Session(bind=engine) as session:
+        try:
+            session.add(user)
+            session.commit()
+        except IntegrityError:
+            session.rollback()
+            return templates.TemplateResponse(
+                request, 
+                'register.jinja2',
+                context={
+                    "error": "Пользователь уже существует"
+                }
+            )
+
+    return RedirectResponse('/login', status_code=302)
+
+@app.get('/profile')
+def get_profile(request: Request):
+    if request.cookies.get('role') != 'user':
+        return RedirectResponse('/login', status_code=302)
+
+    with Session(bind=engine) as session:
+        expr = select(Record).where(Record.user_login == request.cookies.get('login'))
+        records = session.exec(expr).all()
+
+    return templates.TemplateResponse(
+        request, 
+        'profile.jinja2', 
+        context={
+            "login": request.cookies.get('login'),
+            "records": records
+        }
+    )
+
+@app.get("/profile/new")
+def get_new_record(request: Request):
+
+    if request.cookies.get("role") != "user":
+        return RedirectResponse("/login", status_code=302)
+
+    return templates.TemplateResponse(
+        request,
+        "new_record.jinja2",
+        context={
+            "login": request.cookies.get("login")
+        }
+    )
+
+@app.post("/profile/new")
+def post_new_record(request: Request, record: Annotated[Record, Form()]):
+    with Session(bind=engine) as session:
+        try:
+            record.user_login = request.cookies.get('login')
+            session.add(record)
+            session.commit()
+        except IntegrityError:
+            session.rollback()
+            return templates.TemplateResponse(
+                request, 
+                'profile.jinja2',
+                context={
+                    "error": "Не удалось создать заявку"
+                }
+            )
+
+    return RedirectResponse('/profile', status_code=302)
+
+@app.get("/logout")
+def get_logout():
+    response = RedirectResponse("/login", status_code=302)
+    response.delete_cookie("login")
+    response.delete_cookie("role")
+
+    return response
+
+@app.get('/admin')
+def get_admin(request: Request, course: str | None = None, payment: str | None = None):
+    if request.cookies.get('role') != 'moderator':
+        return RedirectResponse('/login', status_code=302)
+
+    with Session(bind=engine) as session:
+        expr = select(Record)
+        if course:
+            expr = expr.where(Record.course == course)
+
+        if payment:
+            expr = expr.where(Record.payment == payment)
+
+        records = session.exec(expr).all()
+
+    return templates.TemplateResponse(
+        request,
+        "admin.jinja2",
+        context={
+            "login": request.cookies.get("login"),
+            "records": records
+        }
+    )
+
+@app.post('/status')
+def post_status(request: Request, new_status: Annotated[NewStatus, Form()]):
+    with Session(bind=engine) as session:
+        try:
+            record = session.exec(select(Record).where(Record.id == new_status.record_id)).one()
+            record.status = new_status.new_status
+            session.commit()
+            session.refresh(record)
+            return RedirectResponse('/admin', status_code=302)
+        except NoResultFound:
+            return RedirectResponse('/admin', status_code=302)

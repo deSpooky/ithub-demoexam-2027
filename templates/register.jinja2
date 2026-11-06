@@ -1,0 +1,25 @@
+{% extends "./layout.jinja2" %}
+
+{% block title %}Регистрация{% endblock %}
+
+{% block content %}
+<form action="/register" method="post">
+    <input type="text" name="login" placeholder="Логин" pattern="[a-zA-Z0-9]{6,}" required>
+    <p class="error">Корректно заполните поле (латиница и цифры, 6+ символов)</p>
+
+    <input type="password" name="password" placeholder="Пароль" pattern="[^\s]{8,}" required>
+    <p class="error">Корректно заполните поле (8+ символов)</p>
+
+    <input type="text" name="fullname" placeholder="ФИО" pattern="[а-яА-Я ]+" required>
+    <p class="error">Корректно заполните поле (кириллица и пробелы)</p>
+
+    <input type="text" name="phone" placeholder="Телефон" pattern="8\(\d{3}\)\d{3}-\d{2}-\d{2}" required>
+    <p class="error">Корректно заполните поле (формат: 8(XXX)XXX-XX-XX)</p>
+
+    <input type="email" name="email" placeholder="Почта" required>
+    <p class="error">Корректно заполните поле (формат: электронной почты)</p>
+
+    <button class="button" type="submit">Создать пользователя</button>
+</form>
+<a href="/login" class="link">Уже зарегистрированы? Войти</a>
+{% endblock %}
